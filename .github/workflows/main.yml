@@ -1,0 +1,42 @@
+name: Free RDP via Ngrok v3
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 360
+
+    steps:
+    - name: إنشاء مستخدم جديد وتفعيل RDP
+      run: |
+        net user rdpuser P@ssw0rd123 /add
+        net localgroup administrators rdpuser /add
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name 'fDenyTSConnections' -Value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+
+    - name: تحميل ngrok (v3)
+      run: |
+        Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip" -OutFile "ngrok.zip"
+        Expand-Archive ngrok.zip -DestinationPath "$env:USERPROFILE\ngrok"
+
+    - name: إضافة authtoken إلى ngrok
+      run: |
+        $Env:PATH += ";$env:USERPROFILE\ngrok"
+        & "$env:USERPROFILE\ngrok\ngrok.exe" config add-authtoken "${{ secrets.NGROK_AUTH_TOKEN }}"
+
+    - name: تشغيل نفق ngrok على المنفذ 3389
+      run: |
+        Start-Process -NoNewWindow -FilePath "$env:USERPROFILE\ngrok\ngrok.exe" -ArgumentList "tcp 3389"
+        Start-Sleep -Seconds 20
+        Invoke-WebRequest http://127.0.0.1:4040/api/tunnels -OutFile tunnel.json
+        Get-Content tunnel.json
+
+    - name: عرض بيانات الاتصال
+      run: |
+        echo "✅ RDP Account Info:"
+        echo "👤 Username: rdpuser"
+        echo "🔐 Password: P@ssw0rd123"
+        echo "🌐 Public Address (Ngrok):"
+        Get-Content tunnel.json
